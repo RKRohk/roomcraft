@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createEditorState, editorReducer } from "./editorState";
 import {
+  PERSISTED_VERSION,
   STORAGE_KEY,
   loadEditorState,
   parsePersisted,
@@ -58,7 +59,7 @@ describe("persistence", () => {
     saveEditorState(storage, state);
 
     const raw = JSON.parse(storage.getItem(STORAGE_KEY)!);
-    expect(raw.version).toBe(1);
+    expect(raw.version).toBe(PERSISTED_VERSION);
     expect(raw.document.furniture).toHaveLength(1);
   });
 
@@ -83,6 +84,17 @@ describe("persistence", () => {
     expect(parsed!.variants).toEqual([]);
   });
 
+  it("migrates version-one local state with an empty custom catalog", () => {
+    const { state } = populated();
+    const legacy = JSON.parse(JSON.stringify(toPersisted(state)));
+    legacy.version = 1;
+    delete legacy.document.customItems;
+
+    const parsed = parsePersisted(JSON.stringify(legacy));
+    expect(parsed?.version).toBe(PERSISTED_VERSION);
+    expect(parsed?.document.customItems).toEqual([]);
+  });
+
   it("drops furniture whose catalog item no longer exists", () => {
     const { state } = populated();
     const payload = toPersisted({
@@ -100,6 +112,43 @@ describe("persistence", () => {
     expect(parsed!.document.furniture.map((item) => item.catalogId)).toEqual([
       "seat-sofa-three",
     ]);
+  });
+
+  it("round-trips custom items and their placed references", () => {
+    const ctx = context();
+    const custom = {
+      id: "custom-reading-chair",
+      name: "Reading Chair",
+      widthCm: 80,
+      depthCm: 85,
+      heightCm: 92,
+      priceUsdCents: 45900,
+      category: "seating",
+      style: "cozy",
+      color: "#6f8073",
+      sourceUrl: "https://listing.invalid/reading-chair",
+      sourceLabel: "Saved listing",
+      rawText: "Soft green reading chair.",
+    };
+    let state = createEditorState(ctx);
+    state = editorReducer(
+      state,
+      {
+        kind: "document",
+        action: {
+          type: "create_custom_item",
+          item: custom,
+          place: { xCm: 100, yCm: 100 },
+        } as never,
+      },
+      ctx,
+    );
+
+    const parsed = parsePersisted(JSON.stringify(toPersisted(state)));
+    expect(parsed?.document).toMatchObject({
+      customItems: [custom],
+      furniture: [{ catalogId: custom.id }],
+    });
   });
 
   it("falls back to a fresh editor state when storage is empty or throws", () => {

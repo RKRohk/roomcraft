@@ -6,7 +6,7 @@ import type { Vector2d } from "konva/lib/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Arc, Circle, Group, Layer, Line, Rect, Stage, Text } from "react-konva";
 
-import { getCatalogItem } from "@/domain/catalog";
+import { resolveFurnitureItem } from "@/domain/customItems";
 import { normalizeAngle } from "@/domain/geometry";
 import { doorSwingGeometry, openingClearanceRect, openingSegment, wallFrame } from "@/domain/openings";
 import { clampToRoom, snapPlacement } from "@/domain/placement";
@@ -214,7 +214,7 @@ export default function RoomCanvas() {
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const catalogId = event.dataTransfer.getData("application/x-roomcraft-item");
-    if (!catalogId || !getCatalogItem(catalogId)) return;
+    if (!catalogId || !resolveFurnitureItem(doc.customItems, catalogId)) return;
 
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -240,11 +240,11 @@ export default function RoomCanvas() {
   const orderedFurniture = useMemo(() => {
     // Rugs sit under everything else, otherwise document order wins.
     return [...doc.furniture].sort((a, b) => {
-      const aRug = getCatalogItem(a.catalogId)?.category === "rugs" ? 0 : 1;
-      const bRug = getCatalogItem(b.catalogId)?.category === "rugs" ? 0 : 1;
+      const aRug = resolveFurnitureItem(doc.customItems, a.catalogId)?.category === "rugs" ? 0 : 1;
+      const bRug = resolveFurnitureItem(doc.customItems, b.catalogId)?.category === "rugs" ? 0 : 1;
       return aRug - bRug;
     });
-  }, [doc.furniture]);
+  }, [doc.customItems, doc.furniture]);
 
   const selectedItem =
     state.selection.length === 1
@@ -342,6 +342,7 @@ export default function RoomCanvas() {
             {orderedFurniture.map((placed) => (
               <FurnitureNode
                 key={placed.id}
+                doc={doc}
                 placed={placed}
                 scale={view.scale}
                 selected={state.selection.includes(placed.id)}
@@ -388,6 +389,7 @@ export default function RoomCanvas() {
           <Layer scaleX={view.scale} scaleY={view.scale}>
             {selectedItem ? (
               <RotationHandle
+                doc={doc}
                 placed={selectedItem}
                 scale={view.scale}
                 toCm={toCm}
@@ -546,6 +548,7 @@ function DimensionLines({ doc, scale }: { doc: RoomDocument; scale: number }) {
 }
 
 function FurnitureNode({
+  doc,
   placed,
   scale,
   selected,
@@ -556,6 +559,7 @@ function FurnitureNode({
   onDragEnd,
   dragBoundFunc,
 }: {
+  doc: RoomDocument;
   placed: PlacedFurniture;
   scale: number;
   selected: boolean;
@@ -566,7 +570,7 @@ function FurnitureNode({
   onDragEnd: () => void;
   dragBoundFunc: (pos: Vector2d) => Vector2d;
 }) {
-  const item = getCatalogItem(placed.catalogId);
+  const item = resolveFurnitureItem(doc.customItems, placed.catalogId);
   if (!item) return null;
 
   const palette = paletteFor(resolveColor(item.colors, placed.colorId));
@@ -794,19 +798,21 @@ function OpeningNode({
 }
 
 function RotationHandle({
+  doc,
   placed,
   scale,
   toCm,
   onRotate,
   onRotateEnd,
 }: {
+  doc: RoomDocument;
   placed: PlacedFurniture;
   scale: number;
   toCm: (pos: Vector2d) => Vector2d;
   onRotate: (rotationDeg: number) => void;
   onRotateEnd: () => void;
 }) {
-  const item = getCatalogItem(placed.catalogId);
+  const item = resolveFurnitureItem(doc.customItems, placed.catalogId);
   if (!item) return null;
 
   const px = (value: number) => value / scale;

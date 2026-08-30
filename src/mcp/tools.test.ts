@@ -43,6 +43,86 @@ describe("room WebMCP tools", () => {
     }
   });
 
+  it("creates, optionally places, and reports a validated custom item", async () => {
+    const store = testStore();
+    const tools = toolsFor(store);
+    const result = await tools.get("create_custom_item")!.execute({
+      id: "custom-reading-chair",
+      name: "Reading Chair",
+      widthCm: 80,
+      depthCm: 85,
+      heightCm: 92,
+      priceUsdCents: 45900,
+      category: "seating",
+      style: "cozy",
+      color: "#6f8073",
+      sourceUrl: "https://listing.invalid/reading-chair",
+      sourceLabel: "Saved listing",
+      rawText: "Soft green reading chair.",
+      place: true,
+      xCm: 100,
+      yCm: 100,
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({
+      customItem: { id: "custom-reading-chair", priceUsdCents: 45900 },
+      placed: { catalogId: "custom-reading-chair", xCm: 100, yCm: 100 },
+    });
+    expect(store.getState().present).toMatchObject({
+      customItems: [{ id: "custom-reading-chair" }],
+    });
+
+    const state = await tools.get("get_room_state")!.execute({});
+    expect(state.structuredContent).toMatchObject({
+      customItems: [{ id: "custom-reading-chair", sourceUrl: "https://listing.invalid/reading-chair" }],
+    });
+
+    const searched = await tools.get("search_furniture")!.execute({ source: "custom" });
+    expect(searched.structuredContent).toMatchObject({
+      results: [{ id: "custom-reading-chair", source: "custom" }],
+    });
+  });
+
+  it("rejects invalid custom dimensions, USD cents, category, and style before mutation", async () => {
+    const store = testStore();
+    const result = await toolsFor(store).get("create_custom_item")!.execute({
+      name: "Invalid custom item",
+      widthCm: 0,
+      depthCm: 85,
+      heightCm: 92,
+      priceUsdCents: -1,
+      category: "not-a-category",
+      style: "not-a-style",
+      color: "#6f8073",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(store.getState().present).toMatchObject({ customItems: [], furniture: [] });
+  });
+
+  it("generates a stable custom id and leaves placement optional", async () => {
+    const store = testStore();
+    const result = await toolsFor(store).get("create_custom_item")!.execute({
+      name: "Window Bench",
+      widthCm: 120,
+      depthCm: 45,
+      heightCm: 48,
+      priceUsdCents: 24900,
+      category: "seating",
+      style: "minimal",
+      color: "#9a8065",
+    });
+
+    const created = result.structuredContent as { customItem: { id: string }; placed: unknown };
+    expect(created.customItem.id).toMatch(/^custom-/);
+    expect(created.placed).toBeNull();
+    expect(store.getState().present).toMatchObject({
+      customItems: [{ id: created.customItem.id }],
+      furniture: [],
+    });
+  });
+
   it("reports room state as compact structured content", async () => {
     const store = testStore();
     const tools = toolsFor(store);
@@ -111,7 +191,8 @@ describe("room WebMCP tools", () => {
       "heightCm",
       "id",
       "name",
-      "priceMinor",
+      "priceUsdCents",
+      "source",
       "style",
       "widthCm",
     ]);

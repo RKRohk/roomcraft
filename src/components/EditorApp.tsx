@@ -3,9 +3,9 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
-import { getCatalogItem } from "@/domain/catalog";
+import { resolveFurnitureItem } from "@/domain/customItems";
 import { loadEditorState, saveEditorState } from "@/domain/persistence";
-import { formatPrice } from "@/domain/units";
+import { formatUsd } from "@/domain/units";
 import {
   getRegistration,
   getServerRegistration,
@@ -88,17 +88,18 @@ function StatusBar() {
   const total = useMemo(
     () =>
       doc.furniture.reduce(
-        (sum, placed) => sum + (getCatalogItem(placed.catalogId)?.priceMinor ?? 0),
+        (sum, placed) =>
+          sum + (resolveFurnitureItem(doc.customItems, placed.catalogId)?.priceUsdCents ?? 0),
         0,
       ),
-    [doc.furniture],
+    [doc.customItems, doc.furniture],
   );
 
   return (
     <footer className="flex h-9 shrink-0 items-center gap-4 border-t border-border-subtle bg-surface px-3 font-mono text-[11px] text-muted">
       <span>{doc.furniture.length} items</span>
       <span>{doc.openings.length} openings</span>
-      <span>{formatPrice(total)} total</span>
+      <span>{formatUsd(total)} total</span>
       <span className="ml-auto hidden md:inline">
         drag to move · R rotate · Ctrl+D duplicate · Del remove · scroll to zoom · drag canvas to pan
       </span>

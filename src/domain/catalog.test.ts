@@ -16,7 +16,7 @@ describe("catalog", () => {
       expect(item.widthCm).toBeGreaterThan(0);
       expect(item.depthCm).toBeGreaterThan(0);
       expect(item.heightCm).toBeGreaterThan(0);
-      expect(item.priceMinor).toBeGreaterThan(0);
+      expect(item.priceUsdCents).toBeGreaterThan(0);
       expect(CATEGORIES).toContain(item.category);
       expect(item.colors.length).toBeGreaterThan(0);
       expect(item.shape.length).toBeGreaterThan(0);
@@ -53,8 +53,8 @@ describe("searchCatalog", () => {
   });
 
   it("filters by maximum price and respects the result limit", () => {
-    const cheap = searchCatalog({ maxPriceMinor: 20000 });
-    expect(cheap.every((item) => item.priceMinor <= 20000)).toBe(true);
+    const cheap = searchCatalog({ maxPriceUsdCents: 20000 });
+    expect(cheap.every((item) => item.priceUsdCents <= 20000)).toBe(true);
 
     expect(searchCatalog({ limit: 3 })).toHaveLength(3);
   });

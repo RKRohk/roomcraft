@@ -1,4 +1,4 @@
-import { getCatalogItem } from "./catalog";
+import { parseCustomItem, resolveFurnitureItem, type CustomItem } from "./customItems";
 import { createEditorState, type EditorState, type LayoutVariant } from "./editorState";
 import { clampOpening } from "./openings";
 import type { ActionContext } from "./reducer";
@@ -23,7 +23,7 @@ import { clamp } from "./units";
  */
 
 export const STORAGE_KEY = "roomcraft:v1";
-export const PERSISTED_VERSION = 1 as const;
+export const PERSISTED_VERSION = 2 as const;
 
 export interface PersistedState {
   version: typeof PERSISTED_VERSION;
@@ -61,12 +61,26 @@ function str(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-function migrateFurniture(value: unknown): PlacedFurniture | null {
+function migrateCustomItems(value: unknown): CustomItem[] {
+  if (!Array.isArray(value)) return [];
+
+  const ids = new Set<string>();
+  const items: CustomItem[] = [];
+  for (const entry of value) {
+    const item = parseCustomItem(entry);
+    if (!item || ids.has(item.id)) continue;
+    ids.add(item.id);
+    items.push(item);
+  }
+  return items;
+}
+
+function migrateFurniture(value: unknown, customItems: readonly CustomItem[]): PlacedFurniture | null {
   if (!isRecord(value)) return null;
   const catalogId = typeof value.catalogId === "string" ? value.catalogId : "";
-  // Items pulled from the catalog since the save are dropped rather than kept
-  // as unrenderable ghosts.
-  if (!getCatalogItem(catalogId)) return null;
+  // Items missing from both sources are dropped rather than kept as
+  // unrenderable ghosts.
+  if (!resolveFurnitureItem(customItems, catalogId)) return null;
 
   return {
     id: str(value.id, `furniture-${Math.random().toString(36).slice(2, 10)}`),
@@ -109,6 +123,7 @@ export function migrateDocument(value: unknown): RoomDocument | null {
   const settings = isRecord(value.settings) ? value.settings : {};
   const now = num(value.updatedAt, Date.now());
 
+  const customItems = migrateCustomItems(value.customItems);
   const doc: RoomDocument = {
     version: ROOM_DOCUMENT_VERSION,
     id: str(value.id, `room-${Math.random().toString(36).slice(2, 10)}`),
@@ -123,8 +138,11 @@ export function migrateDocument(value: unknown): RoomDocument | null {
       ),
     },
     openings: [],
+    customItems,
     furniture: Array.isArray(value.furniture)
-      ? value.furniture.map(migrateFurniture).filter((item): item is PlacedFurniture => item !== null)
+      ? value.furniture
+          .map((item) => migrateFurniture(item, customItems))
+          .filter((item): item is PlacedFurniture => item !== null)
       : [],
     settings: {
       clearanceCm: clamp(num(settings.clearanceCm, DEFAULT_CLEARANCE_CM), 0, 300),
@@ -164,7 +182,7 @@ export function parsePersisted(raw: string): PersistedState | null {
     return null;
   }
 
-  if (!isRecord(parsed) || parsed.version !== PERSISTED_VERSION) return null;
+  if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== PERSISTED_VERSION)) return null;
 
   const document = migrateDocument(parsed.document);
   if (!document) return null;

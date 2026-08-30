@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatLength, formatArea, parseLength, roundToStep } from "./units";
+import { formatLength, formatArea, formatUsd, parseLength, roundToStep } from "./units";
 
 describe("units", () => {
   it("formats centimetres as friendly feet and whole inches", () => {
@@ -15,6 +15,11 @@ describe("units", () => {
 
   it("formats area in square feet from centimetre dimensions", () => {
     expect(formatArea(400, 300)).toBe("129.2 ft²");
+  });
+
+  it("formats USD cents as dollars without a conversion", () => {
+    expect(formatUsd(129900)).toBe("$1,299.00");
+    expect(formatUsd(199)).toBe("$1.99");
   });
 
   it("parses metric and feet-inch input back to centimetres", () => {

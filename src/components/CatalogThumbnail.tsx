@@ -1,4 +1,4 @@
-import type { CatalogItem } from "@/domain/catalog";
+import type { FurnitureItem } from "@/domain/customItems";
 import { paletteFor, resolveColor } from "@/lib/color";
 
 /**
@@ -10,7 +10,7 @@ export function CatalogThumbnail({
   colorId,
   size = 48,
 }: {
-  item: CatalogItem;
+  item: FurnitureItem;
   colorId?: string;
   size?: number;
 }) {

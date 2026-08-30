@@ -1,4 +1,4 @@
-import { getCatalogItem } from "./catalog";
+import { resolveFurnitureItem, type CustomItem } from "./customItems";
 import {
   boundsOf,
   normalizeAngle,
@@ -13,9 +13,12 @@ import { clamp, roundToStep } from "./units";
  * both the canvas and the WebMCP tools can share the same placement rules.
  */
 
-/** The footprint a placed item occupies, or null when its catalog id is unknown. */
-export function footprintOf(placed: PlacedFurniture): OrientedRect | null {
-  const item = getCatalogItem(placed.catalogId);
+/** The footprint a placed item occupies, or null when its item id is unknown. */
+export function footprintOf(
+  placed: PlacedFurniture,
+  customItems: readonly CustomItem[] = [],
+): OrientedRect | null {
+  const item = resolveFurnitureItem(customItems, placed.catalogId);
   if (!item) return null;
   return {
     x: placed.xCm,
@@ -33,7 +36,7 @@ export function footprints(doc: RoomDocument): Array<{
 }> {
   const result: Array<{ placed: PlacedFurniture; rect: OrientedRect }> = [];
   for (const placed of doc.furniture) {
-    const rect = footprintOf(placed);
+    const rect = footprintOf(placed, doc.customItems);
     if (rect) result.push({ placed, rect });
   }
   return result;
@@ -41,7 +44,7 @@ export function footprints(doc: RoomDocument): Array<{
 
 /** Keeps a centre point inside the room for the item's current rotation. */
 export function clampToRoom(doc: RoomDocument, placed: PlacedFurniture): PlacedFurniture {
-  const rect = footprintOf(placed);
+  const rect = footprintOf(placed, doc.customItems);
   if (!rect) return placed;
 
   const bounds = boundsOf(rect);
@@ -83,7 +86,7 @@ export function findFreeSpot(
 ): PlacedFurniture {
   const existing = footprints(doc).map((entry) => entry.rect);
   const isFree = (placed: PlacedFurniture) => {
-    const rect = footprintOf(placed);
+    const rect = footprintOf(placed, doc.customItems);
     if (!rect) return true;
     return !existing.some((other) => rectanglesOverlap(rect, other));
   };

@@ -1,4 +1,9 @@
 import { getCatalogItem } from "./catalog";
+import {
+  createCustomItem,
+  resolveFurnitureItem,
+  type CustomItemInput,
+} from "./customItems";
 import { normalizeAngle } from "./geometry";
 import { clampOpening, MAX_OPENING_WIDTH_CM, MIN_OPENING_WIDTH_CM } from "./openings";
 import { clampToRoom, findFreeSpot, snapPlacement } from "./placement";
@@ -35,6 +40,14 @@ export interface LayoutItemInput {
   label?: string;
 }
 
+export interface CustomItemPlacement {
+  xCm?: number;
+  yCm?: number;
+  rotationDeg?: number;
+  colorId?: string;
+  label?: string;
+}
+
 export type RoomAction =
   | { type: "set_room_dimensions"; widthCm?: number; depthCm?: number; wallThicknessCm?: number }
   | { type: "rename_room"; name: string }
@@ -58,6 +71,12 @@ export type RoomAction =
       rotationDeg?: number;
       colorId?: string;
       label?: string;
+    }
+  | {
+      type: "create_custom_item";
+      item: CustomItemInput;
+      /** A supplied placement adds the new item to the room in the same undo step. */
+      place?: CustomItemPlacement;
     }
   | {
       type: "update_furniture";
@@ -154,7 +173,7 @@ export function applyAction(
       );
 
     case "add_furniture": {
-      const item = getCatalogItem(action.catalogId);
+      const item = resolveFurnitureItem(doc.customItems, action.catalogId);
       if (!item) return doc;
 
       const candidate: PlacedFurniture = {
@@ -168,6 +187,39 @@ export function applyAction(
       };
       const placed = findFreeSpot(doc, snapPlacement(doc, candidate));
       return touch({ ...doc, furniture: [...doc.furniture, placed] }, ctx);
+    }
+
+    case "create_custom_item": {
+      const generatedId = ctx.nextId("custom");
+      const item = createCustomItem(action.item, generatedId);
+      if (
+        !item ||
+        getCatalogItem(item.id) ||
+        doc.customItems.some((existing) => existing.id === item.id)
+      ) {
+        return doc;
+      }
+
+      const withCustomItem: RoomDocument = {
+        ...doc,
+        customItems: [...doc.customItems, item],
+      };
+      if (!action.place) return touch(withCustomItem, ctx);
+
+      const candidate: PlacedFurniture = {
+        id: ctx.nextId("furniture"),
+        catalogId: item.id,
+        xCm: action.place.xCm ?? doc.room.widthCm / 2,
+        yCm: action.place.yCm ?? doc.room.depthCm / 2,
+        rotationDeg: normalizeAngle(action.place.rotationDeg ?? 0),
+        ...(action.place.colorId ? { colorId: action.place.colorId } : {}),
+        ...(action.place.label ? { label: action.place.label } : {}),
+      };
+      const placed = findFreeSpot(withCustomItem, snapPlacement(withCustomItem, candidate));
+      return touch(
+        { ...withCustomItem, furniture: [...withCustomItem.furniture, placed] },
+        ctx,
+      );
     }
 
     case "update_furniture": {

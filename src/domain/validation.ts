@@ -1,4 +1,4 @@
-import { getCatalogItem } from "./catalog";
+import { resolveFurnitureItem } from "./customItems";
 import { gapBetween, rectContainsRect, rectanglesOverlap } from "./geometry";
 import { openingClearanceRect } from "./openings";
 import { footprints } from "./placement";
@@ -39,12 +39,12 @@ export interface ValidationResult {
 
 const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1 };
 
-function labelFor(catalogId: string): string {
-  return getCatalogItem(catalogId)?.name ?? catalogId;
+function labelFor(doc: RoomDocument, catalogId: string): string {
+  return resolveFurnitureItem(doc.customItems, catalogId)?.name ?? catalogId;
 }
 
-function isObstacle(catalogId: string): boolean {
-  return getCatalogItem(catalogId)?.category !== "rugs";
+function isObstacle(doc: RoomDocument, catalogId: string): boolean {
+  return resolveFurnitureItem(doc.customItems, catalogId)?.category !== "rugs";
 }
 
 export function validateLayout(doc: RoomDocument): ValidationResult {
@@ -53,7 +53,7 @@ export function validateLayout(doc: RoomDocument): ValidationResult {
   const room = interiorBounds(doc);
 
   for (const placed of doc.furniture) {
-    if (!getCatalogItem(placed.catalogId)) {
+    if (!resolveFurnitureItem(doc.customItems, placed.catalogId)) {
       issues.push({
         id: `unknown-item:${placed.id}`,
         code: "unknown-item",
@@ -70,7 +70,7 @@ export function validateLayout(doc: RoomDocument): ValidationResult {
         id: `out-of-bounds:${placed.id}`,
         code: "out-of-bounds",
         severity: "error",
-        message: `${labelFor(placed.catalogId)} extends outside the room.`,
+        message: `${labelFor(doc, placed.catalogId)} extends outside the room.`,
         furnitureIds: [placed.id],
       });
     }
@@ -80,13 +80,13 @@ export function validateLayout(doc: RoomDocument): ValidationResult {
     for (let j = i + 1; j < placedRects.length; j += 1) {
       const a = placedRects[i];
       const b = placedRects[j];
-      if (!isObstacle(a.placed.catalogId) || !isObstacle(b.placed.catalogId)) continue;
+      if (!isObstacle(doc, a.placed.catalogId) || !isObstacle(doc, b.placed.catalogId)) continue;
       if (rectanglesOverlap(a.rect, b.rect)) {
         issues.push({
           id: `overlap:${a.placed.id}:${b.placed.id}`,
           code: "overlap",
           severity: "error",
-          message: `${labelFor(a.placed.catalogId)} overlaps ${labelFor(b.placed.catalogId)}.`,
+          message: `${labelFor(doc, a.placed.catalogId)} overlaps ${labelFor(doc, b.placed.catalogId)}.`,
           furnitureIds: [a.placed.id, b.placed.id],
         });
         continue;
@@ -98,7 +98,8 @@ export function validateLayout(doc: RoomDocument): ValidationResult {
           id: `narrow-walkway:${a.placed.id}:${b.placed.id}`,
           code: "narrow-walkway",
           severity: "warning",
-          message: `Only ${Math.round(gap)} cm between ${labelFor(a.placed.catalogId)} and ${labelFor(
+          message: `Only ${Math.round(gap)} cm between ${labelFor(doc, a.placed.catalogId)} and ${labelFor(
+            doc,
             b.placed.catalogId,
           )} (target ${doc.settings.clearanceCm} cm).`,
           furnitureIds: [a.placed.id, b.placed.id],
@@ -112,13 +113,13 @@ export function validateLayout(doc: RoomDocument): ValidationResult {
     const clearance = openingClearanceRect(doc, opening);
     if (!clearance) continue;
     for (const { placed, rect } of placedRects) {
-      if (!isObstacle(placed.catalogId)) continue;
+      if (!isObstacle(doc, placed.catalogId)) continue;
       if (rectanglesOverlap(clearance, rect)) {
         issues.push({
           id: `blocked-door:${opening.id}:${placed.id}`,
           code: "blocked-door",
           severity: "error",
-          message: `${labelFor(placed.catalogId)} blocks the door on the ${opening.wall} wall.`,
+          message: `${labelFor(doc, placed.catalogId)} blocks the door on the ${opening.wall} wall.`,
           furnitureIds: [placed.id],
           openingId: opening.id,
         });

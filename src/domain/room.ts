@@ -1,11 +1,12 @@
 import type { Bounds } from "./geometry";
+import type { CustomItem } from "./customItems";
 
 /**
  * The room document is the single serialisable unit of truth. Everything the
  * canvas draws and every WebMCP tool mutates lives here, versioned so stored
  * documents can be migrated forward.
  */
-export const ROOM_DOCUMENT_VERSION = 1 as const;
+export const ROOM_DOCUMENT_VERSION = 2 as const;
 
 export const MIN_ROOM_SIZE_CM = 150;
 export const MAX_ROOM_SIZE_CM = 2000;
@@ -72,6 +73,8 @@ export interface RoomDocument {
     wallThicknessCm: number;
   };
   openings: Opening[];
+  /** User-owned items, separate from the immutable built-in fictional catalog. */
+  customItems: CustomItem[];
   furniture: PlacedFurniture[];
   settings: RoomSettings;
   createdAt: number;
@@ -98,6 +101,7 @@ export function createRoomDocument(options: CreateRoomOptions): RoomDocument {
       wallThicknessCm: options.wallThicknessCm ?? DEFAULT_WALL_THICKNESS_CM,
     },
     openings: [],
+    customItems: [],
     furniture: [],
     settings: {
       clearanceCm: DEFAULT_CLEARANCE_CM,

@@ -70,7 +70,12 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** Formats a price held in minor currency units. */
-export function formatPrice(minorUnits: number): string {
-  return `${(minorUnits / 100).toFixed(0)} cr`;
+/** Formats an exact USD-cent amount as a dollar display; no conversion is applied. */
+export function formatUsd(cents: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(cents / 100);
 }

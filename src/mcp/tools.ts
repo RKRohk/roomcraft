@@ -1,5 +1,16 @@
-import { CATEGORIES, STYLES, getCatalogItem, type CatalogItem } from "@/domain/catalog";
-import { searchCatalog } from "@/domain/catalogSearch";
+import { CATEGORIES, STYLES } from "@/domain/catalog";
+import { searchFurniture } from "@/domain/catalogSearch";
+import {
+  createCustomItem,
+  isCustomItemColor,
+  isCustomItemId,
+  MAX_CUSTOM_ITEM_DIMENSION_CM,
+  MAX_CUSTOM_ITEM_PRICE_USD_CENTS,
+  resolveFurnitureItem,
+  type CustomItem,
+  type CustomItemInput,
+  type FurnitureItem,
+} from "@/domain/customItems";
 import type { EditorAction, EditorState } from "@/domain/editorState";
 import { doorSwingGeometry } from "@/domain/openings";
 import type { LayoutItemInput } from "@/domain/reducer";
@@ -50,6 +61,7 @@ export const ROOM_TOOL_NAMES = [
   "set_room_dimensions",
   "add_opening",
   "search_furniture",
+  "create_custom_item",
   "place_furniture",
   "update_furniture",
   "remove_furniture",
@@ -120,10 +132,40 @@ function requiredNumber(
   return value;
 }
 
+function optionalInteger(
+  args: Record<string, unknown>,
+  key: string,
+  range?: { min?: number; max?: number },
+): number | undefined {
+  const value = optionalNumber(args, key, range);
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value)) {
+    throw new ToolInputError(`"${key}" must be an integer.`);
+  }
+  return value;
+}
+
+function requiredInteger(
+  args: Record<string, unknown>,
+  key: string,
+  range?: { min?: number; max?: number },
+): number {
+  const value = optionalInteger(args, key, range);
+  if (value === undefined) throw new ToolInputError(`"${key}" is required.`);
+  return value;
+}
+
 function optionalString(args: Record<string, unknown>, key: string): string | undefined {
   const value = args[key];
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "string") throw new ToolInputError(`"${key}" must be a string.`);
+  return value;
+}
+
+function optionalBoolean(args: Record<string, unknown>, key: string): boolean | undefined {
+  const value = args[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "boolean") throw new ToolInputError(`"${key}" must be a boolean.`);
   return value;
 }
 
@@ -171,26 +213,34 @@ function optionalStringArray(args: Record<string, unknown>, key: string): string
 
 const SWINGS = ["inward-left", "inward-right", "outward-left", "outward-right"] as const;
 
-function catalogSummary(item: CatalogItem) {
+function furnitureSummary(item: FurnitureItem) {
   return {
     id: item.id,
     name: item.name,
+    source: item.source,
     category: item.category,
     style: item.style,
     widthCm: item.widthCm,
     depthCm: item.depthCm,
     heightCm: item.heightCm,
-    priceMinor: item.priceMinor,
+    priceUsdCents: item.priceUsdCents,
+    ...(item.sourceLabel ? { sourceLabel: item.sourceLabel } : {}),
+    ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
   };
+}
+
+function customItemView(item: CustomItem) {
+  return { ...item, source: "custom" as const };
 }
 
 function furnitureView(doc: RoomDocument) {
   return doc.furniture.map((placed) => {
-    const item = getCatalogItem(placed.catalogId);
+    const item = resolveFurnitureItem(doc.customItems, placed.catalogId);
     return {
       id: placed.id,
       catalogId: placed.catalogId,
       name: item?.name ?? placed.catalogId,
+      ...(item ? { source: item.source, priceUsdCents: item.priceUsdCents } : {}),
       xCm: placed.xCm,
       yCm: placed.yCm,
       rotationDeg: placed.rotationDeg,
@@ -229,6 +279,7 @@ function stateView(state: EditorState, includeIssues: boolean) {
     settings: doc.settings,
     summary: roomSummary(doc),
     openings: openingView(doc),
+    customItems: doc.customItems.map(customItemView),
     furniture: furnitureView(doc),
     variants: state.variants.map((variant) => ({ id: variant.id, name: variant.name })),
     canUndo: state.past.length > 0,
@@ -281,7 +332,7 @@ export function createRoomTools(store: RoomToolStore): RoomTool[] {
   return [
     define(
       "get_room_state",
-      "Read the current room: dimensions, settings, doors and windows, placed furniture, saved variants and (optionally) validation issues.",
+      "Read the current room: dimensions, settings, doors and windows, room-local custom items, placed furniture, saved variants and (optionally) validation issues.",
       {
         type: "object",
         properties: {
@@ -365,41 +416,156 @@ export function createRoomTools(store: RoomToolStore): RoomTool[] {
 
     define(
       "search_furniture",
-      "Search the local furniture catalog by keywords, category, style, footprint or price. Returns catalog ids to pass to place_furniture.",
+      "Search built-in fictional furniture and room-local custom items by keywords, category, style, footprint or USD price. Returns item ids to pass to place_furniture.",
       {
         type: "object",
         properties: {
           query: { type: "string", description: "Free text matched against name and tags." },
+          source: {
+            type: "string",
+            enum: ["built-in", "custom"],
+            description: "Restrict results to one source; omit to search both.",
+          },
           category: { type: "string", enum: [...CATEGORIES] },
           style: { type: "string", enum: [...STYLES] },
           maxWidthCm: { ...NUMBER, minimum: 1 },
           maxDepthCm: { ...NUMBER, minimum: 1 },
-          maxPriceMinor: { ...NUMBER, minimum: 0 },
+          maxPriceUsdCents: { type: "integer", minimum: 0 },
           limit: { type: "integer", minimum: 1, maximum: 40 },
         },
         additionalProperties: false,
       },
       (args) => {
-        const results = searchCatalog({
+        const results = searchFurniture(store.getState().present.customItems, {
           query: optionalString(args, "query"),
+          source: optionalEnum(args, "source", ["built-in", "custom"] as const),
           category: optionalEnum(args, "category", CATEGORIES),
           style: optionalEnum(args, "style", STYLES),
           maxWidthCm: optionalNumber(args, "maxWidthCm", { min: 1 }),
           maxDepthCm: optionalNumber(args, "maxDepthCm", { min: 1 }),
-          maxPriceMinor: optionalNumber(args, "maxPriceMinor", { min: 0 }),
+          maxPriceUsdCents: optionalInteger(args, "maxPriceUsdCents", { min: 0 }),
           limit: optionalNumber(args, "limit", { min: 1, max: 40 }),
         });
-        return ok({ count: results.length, results: results.map(catalogSummary) });
+        return ok({ count: results.length, results: results.map(furnitureSummary) });
+      },
+    ),
+
+    define(
+      "create_custom_item",
+      "Store a room-local custom item from supplied data. Source URLs are kept as metadata only and are never fetched. Set place to true to place it in the same undoable change.",
+      {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            pattern: "^custom-[a-z0-9][a-z0-9-]*$",
+            description: "Optional stable id beginning with custom-. Omit to generate one.",
+          },
+          name: { type: "string", minLength: 1 },
+          widthCm: { ...NUMBER, minimum: 1, maximum: MAX_CUSTOM_ITEM_DIMENSION_CM },
+          depthCm: { ...NUMBER, minimum: 1, maximum: MAX_CUSTOM_ITEM_DIMENSION_CM },
+          heightCm: { ...NUMBER, minimum: 1, maximum: MAX_CUSTOM_ITEM_DIMENSION_CM },
+          priceUsdCents: { type: "integer", minimum: 0, maximum: MAX_CUSTOM_ITEM_PRICE_USD_CENTS },
+          category: { type: "string", enum: [...CATEGORIES] },
+          style: { type: "string", enum: [...STYLES] },
+          color: {
+            type: "string",
+            pattern: "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+            description: "Hex colour such as #6f8073.",
+          },
+          sourceUrl: { type: "string", format: "uri" },
+          sourceLabel: { type: "string" },
+          rawText: { type: "string", description: "Optional user-supplied listing notes." },
+          place: { type: "boolean", description: "Place the new item immediately." },
+          xCm: NUMBER,
+          yCm: NUMBER,
+          rotationDeg: NUMBER,
+          label: { type: "string" },
+        },
+        required: [
+          "name",
+          "widthCm",
+          "depthCm",
+          "heightCm",
+          "priceUsdCents",
+          "category",
+          "style",
+          "color",
+        ],
+        additionalProperties: false,
+      },
+      (args) => {
+        const id = optionalString(args, "id")?.trim();
+        if (id && !isCustomItemId(id)) {
+          throw new ToolInputError('"id" must begin with "custom-" and use lowercase letters, numbers or hyphens.');
+        }
+        const color = requiredString(args, "color");
+        if (!isCustomItemColor(color)) {
+          throw new ToolInputError('"color" must be a hex value such as "#6f8073".');
+        }
+
+        const item: CustomItemInput = {
+          ...(id ? { id } : {}),
+          name: requiredString(args, "name"),
+          widthCm: requiredNumber(args, "widthCm", { min: 1, max: MAX_CUSTOM_ITEM_DIMENSION_CM }),
+          depthCm: requiredNumber(args, "depthCm", { min: 1, max: MAX_CUSTOM_ITEM_DIMENSION_CM }),
+          heightCm: requiredNumber(args, "heightCm", { min: 1, max: MAX_CUSTOM_ITEM_DIMENSION_CM }),
+          priceUsdCents: requiredInteger(args, "priceUsdCents", {
+            min: 0,
+            max: MAX_CUSTOM_ITEM_PRICE_USD_CENTS,
+          }),
+          category: requiredEnum(args, "category", CATEGORIES),
+          style: requiredEnum(args, "style", STYLES),
+          color,
+          sourceUrl: optionalString(args, "sourceUrl"),
+          sourceLabel: optionalString(args, "sourceLabel"),
+          rawText: optionalString(args, "rawText"),
+        };
+        if (!createCustomItem(item, id ?? "custom-preview")) {
+          throw new ToolInputError("The custom item fields are invalid.");
+        }
+
+        const place = optionalBoolean(args, "place") ?? false;
+        const beforeCustomItems = new Set(store.getState().present.customItems.map((entry) => entry.id));
+        const beforeFurniture = new Set(store.getState().present.furniture.map((entry) => entry.id));
+        store.dispatch({
+          kind: "document",
+          action: {
+            type: "create_custom_item",
+            item,
+            ...(place
+              ? {
+                  place: {
+                    xCm: optionalNumber(args, "xCm"),
+                    yCm: optionalNumber(args, "yCm"),
+                    rotationDeg: optionalNumber(args, "rotationDeg"),
+                    label: optionalString(args, "label"),
+                  },
+                }
+              : {}),
+          },
+        });
+        const doc = store.getState().present;
+        const created = doc.customItems.find((entry) => !beforeCustomItems.has(entry.id));
+        if (!created) {
+          return fail(`A custom item with id "${id ?? "generated"}" already exists or could not be created.`);
+        }
+        const placed = doc.furniture.find((entry) => !beforeFurniture.has(entry.id));
+        return ok({
+          customItem: customItemView(created),
+          placed: placed ? furnitureView(doc).find((view) => view.id === placed.id) : null,
+          issues: validationView(doc),
+        });
       },
     ),
 
     define(
       "place_furniture",
-      "Place a catalog item in the room. Coordinates are the item's centre in centimetres from the room's top-left corner; omitted coordinates default to the room centre and collisions are nudged to a free spot.",
+      "Place a built-in or custom item in the room. Coordinates are the item's centre in centimetres from the room's top-left corner; omitted coordinates default to the room centre and collisions are nudged to a free spot.",
       {
         type: "object",
         properties: {
-          catalogId: { type: "string", description: "Catalog id from search_furniture." },
+          catalogId: { type: "string", description: "Built-in or custom item id from search_furniture." },
           xCm: NUMBER,
           yCm: NUMBER,
           rotationDeg: { ...NUMBER, description: "Clockwise degrees; 0 faces the south wall." },
@@ -411,8 +577,8 @@ export function createRoomTools(store: RoomToolStore): RoomTool[] {
       },
       (args) => {
         const catalogId = requiredString(args, "catalogId");
-        if (!getCatalogItem(catalogId)) {
-          return fail(`Unknown catalogId "${catalogId}". Use search_furniture to find valid ids.`);
+        if (!resolveFurnitureItem(store.getState().present.customItems, catalogId)) {
+          return fail(`Unknown item id "${catalogId}". Use search_furniture to find valid ids.`);
         }
         const before = new Set(store.getState().present.furniture.map((item) => item.id));
         store.dispatch({
@@ -546,8 +712,8 @@ export function createRoomTools(store: RoomToolStore): RoomTool[] {
         const items: LayoutItemInput[] = rawItems.map((entry, index) => {
           const item = record(entry);
           const catalogId = requiredString(item, "catalogId");
-          if (!getCatalogItem(catalogId)) {
-            throw new ToolInputError(`items[${index}]: unknown catalogId "${catalogId}".`);
+          if (!resolveFurnitureItem(store.getState().present.customItems, catalogId)) {
+            throw new ToolInputError(`items[${index}]: unknown item id "${catalogId}".`);
           }
           return {
             catalogId,

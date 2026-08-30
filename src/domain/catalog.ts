@@ -1,6 +1,6 @@
 /**
  * The RoomCraft catalog. Every entry is fictional and generic: descriptive
- * names, invented prices in "credits", and original top-down artwork described
+ * names, direct USD prices, and original top-down artwork described
  * as normalised shape primitives rather than bitmaps.
  *
  * Shape coordinates run 0..1 across the item's width (x) and depth (y), with
@@ -70,8 +70,8 @@ export interface CatalogItem {
   widthCm: number;
   depthCm: number;
   heightCm: number;
-  /** Price in minor units of the fictional "credit" currency. */
-  priceMinor: number;
+  /** Price in USD cents; this is a direct display price, not a conversion. */
+  priceUsdCents: number;
   colors: ColorOption[];
   tags: string[];
   shape: ShapePrimitive[];
@@ -189,7 +189,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 210,
     depthCm: 90,
     heightCm: 82,
-    priceMinor: 129900,
+    priceUsdCents: 129900,
     colors: NEUTRALS,
     tags: ["sofa", "couch", "living room", "lounge"],
     shape: upholstered(3),
@@ -203,7 +203,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 160,
     depthCm: 88,
     heightCm: 80,
-    priceMinor: 99900,
+    priceUsdCents: 99900,
     colors: NEUTRALS,
     tags: ["sofa", "loveseat", "couch", "living room"],
     shape: upholstered(2),
@@ -217,7 +217,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 260,
     depthCm: 180,
     heightCm: 80,
-    priceMinor: 219900,
+    priceUsdCents: 219900,
     colors: NEUTRALS,
     tags: ["sofa", "sectional", "corner", "living room"],
     shape: [
@@ -238,7 +238,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 84,
     depthCm: 86,
     heightCm: 78,
-    priceMinor: 59900,
+    priceUsdCents: 59900,
     colors: NEUTRALS,
     tags: ["chair", "armchair", "living room", "lounge"],
     shape: upholstered(1, 0.14),
@@ -252,7 +252,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 66,
     depthCm: 70,
     heightCm: 80,
-    priceMinor: 34900,
+    priceUsdCents: 34900,
     colors: PAINTED,
     tags: ["chair", "accent", "occasional"],
     shape: [
@@ -270,7 +270,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 60,
     depthCm: 60,
     heightCm: 42,
-    priceMinor: 19900,
+    priceUsdCents: 19900,
     colors: NEUTRALS,
     tags: ["ottoman", "footstool", "pouf"],
     shape: [
@@ -288,7 +288,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 120,
     depthCm: 40,
     heightCm: 45,
-    priceMinor: 24900,
+    priceUsdCents: 24900,
     colors: WOODS,
     tags: ["bench", "seat", "hallway", "entry"],
     shape: [
@@ -306,7 +306,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 46,
     depthCm: 52,
     heightCm: 88,
-    priceMinor: 12900,
+    priceUsdCents: 12900,
     colors: WOODS,
     tags: ["chair", "dining", "seat"],
     shape: [
@@ -324,7 +324,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 40,
     depthCm: 40,
     heightCm: 100,
-    priceMinor: 14900,
+    priceUsdCents: 14900,
     colors: WOODS,
     tags: ["stool", "bar", "counter", "seat"],
     shape: [
@@ -344,7 +344,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 120,
     depthCm: 60,
     heightCm: 42,
-    priceMinor: 29900,
+    priceUsdCents: 29900,
     colors: WOODS,
     tags: ["table", "coffee table", "living room"],
     shape: tableTop(0.1),
@@ -358,7 +358,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 90,
     depthCm: 90,
     heightCm: 40,
-    priceMinor: 26900,
+    priceUsdCents: 26900,
     colors: WOODS,
     tags: ["table", "coffee table", "round"],
     shape: [
@@ -376,7 +376,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 45,
     depthCm: 45,
     heightCm: 55,
-    priceMinor: 11900,
+    priceUsdCents: 11900,
     colors: WOODS,
     tags: ["table", "side table", "end table"],
     shape: tableTop(0.16),
@@ -390,7 +390,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 120,
     depthCm: 35,
     heightCm: 78,
-    priceMinor: 27900,
+    priceUsdCents: 27900,
     colors: WOODS,
     tags: ["table", "console", "hallway"],
     shape: [
@@ -408,7 +408,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 140,
     depthCm: 80,
     heightCm: 75,
-    priceMinor: 64900,
+    priceUsdCents: 64900,
     colors: WOODS,
     tags: ["table", "dining", "kitchen"],
     shape: tableTop(0.09),
@@ -422,7 +422,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 200,
     depthCm: 95,
     heightCm: 75,
-    priceMinor: 89900,
+    priceUsdCents: 89900,
     colors: WOODS,
     tags: ["table", "dining", "kitchen", "large"],
     shape: [
@@ -440,7 +440,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 120,
     depthCm: 120,
     heightCm: 75,
-    priceMinor: 72900,
+    priceUsdCents: 72900,
     colors: WOODS,
     tags: ["table", "dining", "round", "kitchen"],
     shape: [
@@ -460,7 +460,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 80,
     depthCm: 32,
     heightCm: 200,
-    priceMinor: 39900,
+    priceUsdCents: 39900,
     colors: PAINTED,
     tags: ["shelf", "bookshelf", "bookcase", "storage"],
     shape: carcass(2),
@@ -474,7 +474,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 120,
     depthCm: 32,
     heightCm: 90,
-    priceMinor: 32900,
+    priceUsdCents: 32900,
     colors: PAINTED,
     tags: ["shelf", "bookshelf", "bookcase", "storage", "divider"],
     shape: carcass(3),
@@ -488,7 +488,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 160,
     depthCm: 42,
     heightCm: 50,
-    priceMinor: 49900,
+    priceUsdCents: 49900,
     colors: WOODS,
     tags: ["media", "console", "tv stand", "storage"],
     shape: [
@@ -508,7 +508,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 180,
     depthCm: 45,
     heightCm: 80,
-    priceMinor: 74900,
+    priceUsdCents: 74900,
     colors: WOODS,
     tags: ["sideboard", "buffet", "cabinet", "storage", "dining"],
     shape: carcass(4),
@@ -522,7 +522,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 150,
     depthCm: 60,
     heightCm: 210,
-    priceMinor: 109900,
+    priceUsdCents: 109900,
     colors: PAINTED,
     tags: ["wardrobe", "closet", "storage", "bedroom"],
     shape: [
@@ -542,7 +542,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 140,
     depthCm: 48,
     heightCm: 80,
-    priceMinor: 62900,
+    priceUsdCents: 62900,
     colors: WOODS,
     tags: ["dresser", "drawers", "chest", "storage", "bedroom"],
     shape: [
@@ -561,7 +561,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 45,
     depthCm: 40,
     heightCm: 55,
-    priceMinor: 15900,
+    priceUsdCents: 15900,
     colors: WOODS,
     tags: ["nightstand", "bedside", "storage", "bedroom"],
     shape: [
@@ -581,7 +581,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 90,
     depthCm: 200,
     heightCm: 45,
-    priceMinor: 54900,
+    priceUsdCents: 54900,
     colors: PAINTED,
     tags: ["bed", "single", "bedroom"],
     shape: mattress(1),
@@ -595,7 +595,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 140,
     depthCm: 200,
     heightCm: 45,
-    priceMinor: 84900,
+    priceUsdCents: 84900,
     colors: NEUTRALS,
     tags: ["bed", "double", "bedroom"],
     shape: mattress(2),
@@ -609,7 +609,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 160,
     depthCm: 210,
     heightCm: 48,
-    priceMinor: 99900,
+    priceUsdCents: 99900,
     colors: NEUTRALS,
     tags: ["bed", "queen", "bedroom"],
     shape: mattress(2),
@@ -623,7 +623,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 190,
     depthCm: 210,
     heightCm: 48,
-    priceMinor: 129900,
+    priceUsdCents: 129900,
     colors: NEUTRALS,
     tags: ["bed", "king", "bedroom", "large"],
     shape: mattress(3),
@@ -639,7 +639,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 130,
     depthCm: 60,
     heightCm: 75,
-    priceMinor: 44900,
+    priceUsdCents: 44900,
     colors: WOODS,
     tags: ["desk", "office", "workspace", "study"],
     shape: [
@@ -657,7 +657,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 160,
     depthCm: 160,
     heightCm: 75,
-    priceMinor: 69900,
+    priceUsdCents: 69900,
     colors: WOODS,
     tags: ["desk", "corner", "office", "workspace", "l-shaped"],
     shape: [
@@ -676,7 +676,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 62,
     depthCm: 62,
     heightCm: 110,
-    priceMinor: 39900,
+    priceUsdCents: 39900,
     colors: PAINTED,
     tags: ["chair", "task chair", "office", "desk", "workspace"],
     shape: [
@@ -694,7 +694,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 45,
     depthCm: 55,
     heightCm: 70,
-    priceMinor: 22900,
+    priceUsdCents: 22900,
     colors: PAINTED,
     tags: ["cabinet", "filing", "office", "storage", "workspace"],
     shape: [
@@ -714,7 +714,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 40,
     depthCm: 40,
     heightCm: 160,
-    priceMinor: 17900,
+    priceUsdCents: 17900,
     colors: PAINTED,
     tags: ["lamp", "floor lamp", "lighting"],
     shape: [
@@ -732,7 +732,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 90,
     depthCm: 40,
     heightCm: 200,
-    priceMinor: 31900,
+    priceUsdCents: 31900,
     colors: PAINTED,
     tags: ["lamp", "arc lamp", "lighting", "floor lamp"],
     shape: [
@@ -752,7 +752,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 160,
     depthCm: 230,
     heightCm: 1,
-    priceMinor: 24900,
+    priceUsdCents: 24900,
     colors: NEUTRALS,
     tags: ["rug", "carpet", "floor"],
     shape: [
@@ -769,7 +769,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 200,
     depthCm: 300,
     heightCm: 1,
-    priceMinor: 39900,
+    priceUsdCents: 39900,
     colors: NEUTRALS,
     tags: ["rug", "carpet", "floor", "large"],
     shape: [
@@ -787,7 +787,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 180,
     depthCm: 180,
     heightCm: 1,
-    priceMinor: 29900,
+    priceUsdCents: 29900,
     colors: NEUTRALS,
     tags: ["rug", "carpet", "floor", "round"],
     shape: [
@@ -807,7 +807,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 60,
     depthCm: 60,
     heightCm: 150,
-    priceMinor: 12900,
+    priceUsdCents: 12900,
     colors: [
       { id: "terracotta", name: "Terracotta", hex: "#b8785f" },
       { id: "chalk", name: "Chalk", hex: "#e2ded6" },
@@ -830,7 +830,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 30,
     depthCm: 30,
     heightCm: 60,
-    priceMinor: 5900,
+    priceUsdCents: 5900,
     colors: [
       { id: "terracotta", name: "Terracotta", hex: "#b8785f" },
       { id: "chalk", name: "Chalk", hex: "#e2ded6" },
@@ -850,7 +850,7 @@ export const CATALOG: CatalogItem[] = [
     widthCm: 60,
     depthCm: 25,
     heightCm: 170,
-    priceMinor: 21900,
+    priceUsdCents: 21900,
     colors: WOODS,
     tags: ["mirror", "decor", "bedroom"],
     shape: [

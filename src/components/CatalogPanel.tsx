@@ -3,24 +3,25 @@
 import { useMemo, useState } from "react";
 
 import { CATEGORIES, type FurnitureCategory } from "@/domain/catalog";
-import { searchCatalog } from "@/domain/catalogSearch";
-import { formatPrice } from "@/domain/units";
-import { useRoomStore } from "@/state/RoomStoreProvider";
+import { searchFurniture } from "@/domain/catalogSearch";
+import { formatUsd } from "@/domain/units";
+import { useEditorState, useRoomStore } from "@/state/RoomStoreProvider";
 import { CatalogThumbnail } from "./CatalogThumbnail";
 
 /** Browse and add catalog items: click to place, or drag straight onto the plan. */
 export function CatalogPanel() {
   const store = useRoomStore();
+  const doc = useEditorState().present;
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<FurnitureCategory | "all">("all");
 
   const results = useMemo(
     () =>
-      searchCatalog({
+      searchFurniture(doc.customItems, {
         query: query.trim() || undefined,
         category: category === "all" ? undefined : category,
       }),
-    [category, query],
+    [category, doc.customItems, query],
   );
 
   const add = (catalogId: string) => {
@@ -90,9 +91,16 @@ export function CatalogPanel() {
                 <CatalogThumbnail item={item} size={40} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-foreground">{item.name}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="min-w-0 truncate text-sm text-foreground">{item.name}</span>
+                  {item.source === "custom" ? (
+                    <span className="shrink-0 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-strong">
+                      Custom
+                    </span>
+                  ) : null}
+                </span>
                 <span className="block font-mono text-[11px] text-muted">
-                  {item.widthCm}×{item.depthCm} cm · {formatPrice(item.priceMinor)}
+                  {item.widthCm}×{item.depthCm} cm · {formatUsd(item.priceUsdCents)}
                 </span>
               </span>
             </button>
@@ -101,7 +109,7 @@ export function CatalogPanel() {
       </div>
 
       <p className="border-t border-border-subtle px-3 py-2 text-[11px] text-muted">
-        {results.length} items · drag onto the plan or click to place
+        {results.length} items · custom items are marked · drag onto the plan or click to place
       </p>
     </aside>
   );

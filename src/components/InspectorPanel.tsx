@@ -1,6 +1,6 @@
 "use client";
 
-import { getCatalogItem } from "@/domain/catalog";
+import { resolveFurnitureItem } from "@/domain/customItems";
 import { MIN_OPENING_WIDTH_CM, wallLengthCm } from "@/domain/openings";
 import {
   MAX_ROOM_SIZE_CM,
@@ -11,7 +11,7 @@ import {
   type PlacedFurniture,
   type WallId,
 } from "@/domain/room";
-import { formatArea, formatLength, formatPrice } from "@/domain/units";
+import { formatArea, formatLength, formatUsd } from "@/domain/units";
 import { useEditorState, useRoomStore } from "@/state/RoomStoreProvider";
 import { IssuesPanel } from "./IssuesPanel";
 import { Button, NumberField, Section, SectionTitle, SelectField, TextField, Toggle } from "./ui";
@@ -142,7 +142,8 @@ function RoomInspector() {
 
 function FurnitureInspector({ placed }: { placed: PlacedFurniture }) {
   const store = useRoomStore();
-  const item = getCatalogItem(placed.catalogId);
+  const doc = useEditorState().present;
+  const item = resolveFurnitureItem(doc.customItems, placed.catalogId);
   if (!item) return null;
 
   const update = (patch: Partial<Omit<PlacedFurniture, "id" | "catalogId">>) =>
@@ -155,11 +156,37 @@ function FurnitureInspector({ placed }: { placed: PlacedFurniture }) {
     <>
       <Section>
         <SectionTitle>Selected</SectionTitle>
-        <p className="text-sm text-foreground">{placed.label || item.name}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-foreground">{placed.label || item.name}</p>
+          {item.source === "custom" ? (
+            <span className="rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-strong">
+              Custom
+            </span>
+          ) : null}
+        </div>
         <p className="mt-0.5 font-mono text-[11px] text-muted">
-          {item.widthCm}×{item.depthCm}×{item.heightCm} cm · {formatPrice(item.priceMinor)} ·{" "}
+          {item.widthCm}×{item.depthCm}×{item.heightCm} cm · {formatUsd(item.priceUsdCents)} ·{" "}
           {item.style}
         </p>
+        {item.source === "custom" ? (
+          <div className="mt-2 rounded-md border border-border-subtle bg-background p-2 text-[11px] text-muted">
+            <p>Custom item stored in this browser.</p>
+            {item.sourceUrl ? (
+              <a
+                href={item.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 block truncate text-accent-strong underline underline-offset-2"
+                title={item.sourceUrl}
+              >
+                {item.sourceLabel || item.sourceUrl}
+              </a>
+            ) : item.sourceLabel ? (
+              <p className="mt-1">{item.sourceLabel}</p>
+            ) : null}
+            {item.rawText ? <p className="mt-1 line-clamp-3">{item.rawText}</p> : null}
+          </div>
+        ) : null}
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           <NumberField label="X (centre)" value={placed.xCm} onCommit={(xCm) => update({ xCm })} />
