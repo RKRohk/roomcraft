@@ -83,7 +83,8 @@ function optionalText(value: unknown, maxLength: number): string | undefined {
   return trimmed.length > 0 && trimmed.length <= maxLength ? trimmed : undefined;
 }
 
-function normalizedHex(value: string): string {
+/** Expands a three-digit hex colour to its canonical lowercase six-digit form. */
+export function normalizeCustomItemColor(value: string): string {
   const lower = value.trim().toLowerCase();
   if (lower.length === 4) {
     return `#${lower
@@ -95,7 +96,8 @@ function normalizedHex(value: string): string {
   return lower;
 }
 
-function isHttpUrl(value: string): boolean {
+/** Source metadata may only reference http(s); RoomCraft never fetches the URL. */
+export function isHttpSourceUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "https:" || url.protocol === "http:";
@@ -142,7 +144,7 @@ export function createCustomItem(
     !CATEGORIES.includes(input.category) ||
     !STYLES.includes(input.style) ||
     !isCustomItemColor(input.color) ||
-    (suppliedSourceUrl && (!sourceUrl || !isHttpUrl(sourceUrl)))
+    (suppliedSourceUrl && (!sourceUrl || !isHttpSourceUrl(sourceUrl)))
   ) {
     return null;
   }
@@ -159,7 +161,7 @@ export function createCustomItem(
     priceUsdCents: input.priceUsdCents,
     category: input.category,
     style: input.style,
-    color: normalizedHex(input.color),
+    color: normalizeCustomItemColor(input.color),
     ...(sourceUrl ? { sourceUrl } : {}),
     ...(sourceLabel ? { sourceLabel } : {}),
     ...(rawText ? { rawText } : {}),

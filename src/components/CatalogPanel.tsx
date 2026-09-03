@@ -7,9 +7,10 @@ import { searchFurniture } from "@/domain/catalogSearch";
 import { formatUsd } from "@/domain/units";
 import { useEditorState, useRoomStore } from "@/state/RoomStoreProvider";
 import { CatalogThumbnail } from "./CatalogThumbnail";
+import { AddCustomItemButton } from "./CustomItemForm";
 
 /** Browse and add catalog items: click to place, or drag straight onto the plan. */
-export function CatalogPanel() {
+export function CatalogPanel({ dockOpen }: { dockOpen: boolean }) {
   const store = useRoomStore();
   const doc = useEditorState().present;
   const [query, setQuery] = useState("");
@@ -29,9 +30,15 @@ export function CatalogPanel() {
   };
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col border-r border-border-subtle bg-surface">
+    <aside
+      id="dock-panel-catalog"
+      /* Narrow: a full-width dock under the plan, height-capped so the plan
+         keeps most of the pane. Wide: the left rail, full height. */
+      className={`${dockOpen ? "flex" : "hidden lg:flex"} order-3 h-[clamp(14rem,36vh,20rem)] w-full shrink-0 flex-col border-t border-border-subtle bg-surface lg:order-1 lg:h-auto lg:w-72 lg:border-r lg:border-t-0`}
+      aria-label="Furniture catalog"
+    >
       <div className="border-b border-border-subtle p-3">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+        <h2 className="mb-2 hidden text-xs font-semibold uppercase tracking-wider text-muted lg:block">
           Catalog
         </h2>
         <label className="sr-only" htmlFor="catalog-search">
@@ -46,7 +53,9 @@ export function CatalogPanel() {
           className="h-11 w-full rounded-md border border-border-subtle bg-background px-3 text-sm text-foreground placeholder:text-muted/70"
         />
 
-        <div className="mt-2 flex flex-wrap gap-1">
+        {/* Dock height is scarce, so chips scroll on one line when narrow and
+            wrap only in the tall desktop rail. */}
+        <div className="mt-2 -mx-3 flex gap-1 overflow-x-auto px-3 pb-0.5 [scrollbar-width:none] lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
           <CategoryChip
             active={category === "all"}
             onClick={() => setCategory("all")}
@@ -61,9 +70,16 @@ export function CatalogPanel() {
             />
           ))}
         </div>
+
+        <AddCustomItemButton />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2" role="list">
+      {/* The dock is full-width but short, so a second column at mid widths
+          shows roughly twice as many items without scrolling. */}
+      <div
+        className="grid min-h-0 flex-1 grid-cols-1 content-start gap-x-2 overflow-y-auto overscroll-contain p-2 sm:grid-cols-2 lg:grid-cols-1"
+        role="list"
+      >
         {results.length === 0 ? (
           <p className="p-4 text-sm text-muted">
             Nothing matches “{query}”. Try a broader search.
@@ -87,8 +103,11 @@ export function CatalogPanel() {
               title={`${item.description} — drag onto the plan or click to place`}
               className="flex w-full min-h-11 items-center gap-3 rounded-md p-2 text-left transition hover:bg-surface-raised"
             >
-              <span className="grid size-12 shrink-0 place-items-center rounded-md border border-border-subtle bg-background">
-                <CatalogThumbnail item={item} size={40} />
+              {/* A 4:3 tile, wider than it is tall, so wide pieces like a
+                  console can use its full width instead of being letterboxed
+                  into a square. */}
+              <span className="flex h-12 w-16 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-background p-1.5">
+                <CatalogThumbnail item={item} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
@@ -129,7 +148,7 @@ function CategoryChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-full border px-2.5 py-1 text-[11px] capitalize transition ${
+      className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] capitalize transition ${
         active
           ? "border-accent bg-accent/15 text-accent-strong"
           : "border-border-subtle text-muted hover:border-border-strong hover:text-foreground"
