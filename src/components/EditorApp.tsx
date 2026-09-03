@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { resolveFurnitureItem } from "@/domain/customItems";
 import { loadEditorState, saveEditorState } from "@/domain/persistence";
-import { formatUsd } from "@/domain/units";
+import { formatArea, formatUsd } from "@/domain/units";
 import {
   getRegistration,
   getServerRegistration,
@@ -16,6 +16,7 @@ import { createRoomTools } from "@/mcp/tools";
 import { RoomStoreProvider, useEditorState, useRoomStore } from "@/state/RoomStoreProvider";
 import { createActionContext, createRoomStore } from "@/state/store";
 import { CatalogPanel } from "./CatalogPanel";
+import { type DockState, type DockTab, toggleDock } from "./editorLayout";
 import { InspectorPanel } from "./InspectorPanel";
 import { TopBar } from "./TopBar";
 
@@ -34,6 +35,9 @@ export function EditorApp() {
     const ctx = createActionContext();
     return { ctx, store: createRoomStore(ctx) };
   });
+  // Narrow layouts show one docked panel at a time; wide layouts show both
+  // rails and ignore this entirely.
+  const [dock, setDock] = useState<DockState>("catalog");
   const mcp = useSyncExternalStore(
     subscribeRegistration,
     getRegistration,
@@ -67,17 +71,101 @@ export function EditorApp() {
     <RoomStoreProvider store={store}>
       <div className="flex h-full flex-col">
         <TopBar mcp={mcp} />
-        <div className="flex min-h-0 flex-1">
-          <CatalogPanel />
-          <main className="relative min-w-0 flex-1">
+        {/*
+          Narrow: a vertical stack — plan on top, one docked panel underneath.
+          Wide (lg+): the classic catalog / plan / inspector three-pane, restored
+          by the `order-*` overrides so the plan sits back in the middle.
+        */}
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+          <main className="relative order-1 min-h-0 min-w-0 flex-1 lg:order-2">
             <RoomCanvas />
           </main>
-          <InspectorPanel />
+
+          <DockBar dock={dock} onToggle={(tab) => setDock((current) => toggleDock(current, tab))} />
+
+          <CatalogPanel dockOpen={dock === "catalog"} />
+          <InspectorPanel dockOpen={dock === "inspector"} />
         </div>
         <StatusBar />
       </div>
       <KeyboardShortcuts />
     </RoomStoreProvider>
+  );
+}
+
+/**
+ * Narrow-mode panel switcher. Sits directly above the docked panel it controls,
+ * so the relationship is visible rather than implied by an icon in the corner.
+ * Pressing the open panel's button collapses the dock and gives the plan the
+ * whole pane.
+ */
+function DockBar({
+  dock,
+  onToggle,
+}: {
+  dock: DockState;
+  onToggle: (tab: DockTab) => void;
+}) {
+  const state = useEditorState();
+  const selectedCount = state.selection.length;
+
+  return (
+    <div className="order-2 flex shrink-0 items-center gap-1 border-t border-border-subtle bg-surface px-2 py-1 lg:hidden">
+      <DockButton tab="catalog" label="Catalog" dock={dock} onToggle={onToggle} />
+      <DockButton tab="inspector" label="Inspector" dock={dock} onToggle={onToggle}>
+        {selectedCount > 0 ? (
+          <span className="rounded-full bg-accent/20 px-1.5 py-0.5 font-mono text-[10px] text-accent-strong">
+            {selectedCount}
+          </span>
+        ) : null}
+      </DockButton>
+      {dock === "collapsed" ? (
+        <span className="ml-auto pr-1 font-mono text-[10px] text-muted">panels hidden</span>
+      ) : null}
+    </div>
+  );
+}
+
+function DockButton({
+  tab,
+  label,
+  dock,
+  onToggle,
+  children,
+}: {
+  tab: DockTab;
+  label: string;
+  dock: DockState;
+  onToggle: (tab: DockTab) => void;
+  children?: React.ReactNode;
+}) {
+  const open = dock === tab;
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(tab)}
+      aria-expanded={open}
+      aria-controls={`dock-panel-${tab}`}
+      title={open ? `Hide the ${label} panel` : `Show the ${label} panel`}
+      className={`flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm transition ${
+        open
+          ? "bg-surface-raised font-medium text-foreground shadow-[inset_0_-2px_0_0_var(--accent)]"
+          : "text-muted hover:bg-surface-raised hover:text-foreground"
+      }`}
+    >
+      {label}
+      {children}
+      <svg
+        viewBox="0 0 24 24"
+        className={`size-3.5 transition-transform ${open ? "" : "rotate-180"}`}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden
+      >
+        <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
   );
 }
 
@@ -97,13 +185,16 @@ function StatusBar() {
 
   return (
     <footer className="flex h-9 shrink-0 items-center gap-4 border-t border-border-subtle bg-surface px-3 font-mono text-[11px] text-muted">
-      <span>{doc.furniture.length} items</span>
-      <span>{doc.openings.length} openings</span>
-      <span>{formatUsd(total)} total</span>
-      <span className="ml-auto hidden md:inline">
+      {/* The room's identity moves down here when the bar above gets compact,
+          so it stays on screen at every width. */}
+      <span className="shrink-0 xl:hidden">{formatArea(doc.room.widthCm, doc.room.depthCm)}</span>
+      <span className="shrink-0">{doc.furniture.length} items</span>
+      <span className="hidden shrink-0 sm:inline">{doc.openings.length} openings</span>
+      <span className="shrink-0">{formatUsd(total)} total</span>
+      <span className="ml-auto hidden truncate lg:inline">
         drag to move · R rotate · Ctrl+D duplicate · Del remove · scroll to zoom · drag canvas to pan
       </span>
-      <span>
+      <span className="ml-auto shrink-0 lg:ml-0">
         {state.selection.length > 0 ? `${state.selection.length} selected` : "nothing selected"}
       </span>
     </footer>

@@ -1,84 +1,84 @@
 import type { FurnitureItem } from "@/domain/customItems";
 import { paletteFor, resolveColor } from "@/lib/color";
+import { THUMBNAIL_STROKE_PX, projectShape } from "./shapeProjection";
 
 /**
  * The same shape primitives the canvas draws, rendered as SVG for list rows so
  * a catalog entry always looks like what will land in the room.
+ *
+ * The SVG scales to fill its tile and keeps the item's real footprint aspect,
+ * so a wide console uses the tile's full width instead of being letterboxed
+ * inside a square. Strokes are non-scaling, which keeps outline detail at a
+ * true 1.25px however small the tile is.
  */
 export function CatalogThumbnail({
   item,
   colorId,
-  size = 48,
+  className,
 }: {
   item: FurnitureItem;
   colorId?: string;
-  size?: number;
+  className?: string;
 }) {
   const palette = paletteFor(resolveColor(item.colors, colorId));
-  const aspect = item.widthCm / item.depthCm;
-  const width = aspect >= 1 ? 100 : 100 * aspect;
-  const height = aspect >= 1 ? 100 / aspect : 100;
-  const minSide = Math.min(width, height);
+  const projected = projectShape(item.shape, item.widthCm, item.depthCm, palette);
 
   return (
     <svg
-      viewBox="0 0 100 100"
-      width={size}
-      height={size}
+      viewBox={projected.viewBox}
+      preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={`${item.name}, ${item.widthCm} by ${item.depthCm} centimetres`}
-      className="shrink-0"
+      className={className ?? "h-full w-full"}
     >
-      <g transform={`translate(${(100 - width) / 2} ${(100 - height) / 2})`}>
-        {item.shape.map((primitive, index) => {
-          const color = palette[primitive.role];
-
-          if (primitive.kind === "rect") {
-            return (
-              <rect
-                key={index}
-                x={primitive.x * width}
-                y={primitive.y * height}
-                width={primitive.w * width}
-                height={primitive.h * height}
-                rx={(primitive.radius ?? 0) * minSide}
-                fill={primitive.stroke ? "none" : color}
-                stroke={primitive.stroke ? color : "none"}
-                strokeWidth={primitive.stroke ? 1.5 : 0}
-              />
-            );
-          }
-
-          if (primitive.kind === "ellipse") {
-            return (
-              <ellipse
-                key={index}
-                cx={primitive.cx * width}
-                cy={primitive.cy * height}
-                rx={primitive.rx * width}
-                ry={primitive.ry * height}
-                fill={primitive.stroke ? "none" : color}
-                stroke={primitive.stroke ? color : "none"}
-                strokeWidth={primitive.stroke ? 1.5 : 0}
-              />
-            );
-          }
-
-          const points: string[] = [];
-          for (let i = 0; i < primitive.points.length; i += 2) {
-            points.push(`${primitive.points[i] * width},${primitive.points[i + 1] * height}`);
-          }
+      {projected.elements.map((element, index) => {
+        if (element.kind === "rect") {
           return (
-            <polyline
+            <rect
               key={index}
-              points={points.join(" ")}
-              fill="none"
-              stroke={color}
-              strokeWidth={1.5}
+              x={element.x}
+              y={element.y}
+              width={element.width}
+              height={element.height}
+              rx={element.rx}
+              fill={element.fill}
+              stroke={element.stroke}
+              strokeWidth={element.stroke === "none" ? 0 : THUMBNAIL_STROKE_PX}
+              vectorEffect="non-scaling-stroke"
             />
           );
-        })}
-      </g>
+        }
+
+        if (element.kind === "ellipse") {
+          return (
+            <ellipse
+              key={index}
+              cx={element.cx}
+              cy={element.cy}
+              rx={element.rx}
+              ry={element.ry}
+              fill={element.fill}
+              stroke={element.stroke}
+              strokeWidth={element.stroke === "none" ? 0 : THUMBNAIL_STROKE_PX}
+              vectorEffect="non-scaling-stroke"
+            />
+          );
+        }
+
+        const Tag = element.kind === "polygon" ? "polygon" : "polyline";
+        return (
+          <Tag
+            key={index}
+            points={element.points}
+            fill="none"
+            stroke={element.stroke}
+            strokeWidth={THUMBNAIL_STROKE_PX}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      })}
     </svg>
   );
 }

@@ -20,14 +20,19 @@ import { Button, NumberField, Section, SectionTitle, SelectField, TextField, Tog
  * The Inspect surface: exact numeric editing for whatever is selected, and the
  * room's own properties when nothing is.
  */
-export function InspectorPanel() {
+export function InspectorPanel({ dockOpen }: { dockOpen: boolean }) {
   const state = useEditorState();
   const doc = state.present;
   const selected = doc.furniture.filter((item) => state.selection.includes(item.id));
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border-subtle bg-surface">
-      <div className="min-h-0 flex-1 overflow-y-auto">
+    <aside
+      id="dock-panel-inspector"
+      /* Narrow: a full-width dock under the plan. Wide: the right rail. */
+      className={`${dockOpen ? "flex" : "hidden lg:flex"} order-4 h-[clamp(14rem,36vh,20rem)] w-full shrink-0 flex-col border-t border-border-subtle bg-surface lg:order-3 lg:h-auto lg:w-80 lg:border-l lg:border-t-0`}
+      aria-label="Room inspector"
+    >
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {selected.length === 1 ? (
           <FurnitureInspector placed={selected[0]} />
         ) : selected.length > 1 ? (
