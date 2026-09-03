@@ -12,9 +12,14 @@ import {
   type FurnitureItem,
 } from "@/domain/customItems";
 import type { EditorAction, EditorState } from "@/domain/editorState";
-import { doorSwingGeometry } from "@/domain/openings";
+import {
+  doorSwingGeometry,
+  MAX_OPENING_WIDTH_CM,
+  MIN_OPENING_WIDTH_CM,
+  wallLengthCm,
+} from "@/domain/openings";
 import type { LayoutItemInput } from "@/domain/reducer";
-import { WALL_IDS, type RoomDocument } from "@/domain/room";
+import { WALL_IDS, type Opening, type RoomDocument } from "@/domain/room";
 import { roomSummary } from "@/domain/room";
 import { validateLayout } from "@/domain/validation";
 
@@ -59,7 +64,10 @@ export interface RoomTool {
 export const ROOM_TOOL_NAMES = [
   "get_room_state",
   "set_room_dimensions",
+  "set_room_settings",
   "add_opening",
+  "update_opening",
+  "remove_opening",
   "search_furniture",
   "create_custom_item",
   "place_furniture",
@@ -69,6 +77,7 @@ export const ROOM_TOOL_NAMES = [
   "validate_layout",
   "save_layout_variant",
   "activate_layout_variant",
+  "reset_current_layout",
   "undo_last_change",
 ] as const;
 
@@ -377,6 +386,48 @@ export function createRoomTools(store: RoomToolStore): RoomTool[] {
     ),
 
     define(
+      "set_room_settings",
+      "Update the room name, walkway-clearance target, placement grid size, or snap-to-grid behavior as one undoable change.",
+      {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1 },
+          clearanceCm: { ...NUMBER, minimum: 0, maximum: 300 },
+          gridCm: { ...NUMBER, minimum: 1, maximum: 100 },
+          snapToGrid: { type: "boolean" },
+        },
+        additionalProperties: false,
+      },
+      (args) => {
+        const rawName = optionalString(args, "name");
+        const name = rawName?.trim();
+        if (rawName !== undefined && !name) throw new ToolInputError('"name" must not be blank.');
+        const clearanceCm = optionalNumber(args, "clearanceCm", { min: 0, max: 300 });
+        const gridCm = optionalNumber(args, "gridCm", { min: 1, max: 100 });
+        const snapToGrid = optionalBoolean(args, "snapToGrid");
+        if (
+          name === undefined &&
+          clearanceCm === undefined &&
+          gridCm === undefined &&
+          snapToGrid === undefined
+        ) {
+          throw new ToolInputError(
+            "Provide at least one of name, clearanceCm, gridCm or snapToGrid.",
+          );
+        }
+        store.dispatch({
+          kind: "document",
+          action: {
+            type: "set_settings",
+            name,
+            patch: { clearanceCm, gridCm, snapToGrid },
+          },
+        });
+        return ok(stateView(store.getState(), true));
+      },
+    ),
+
+    define(
       "add_opening",
       "Add a door or window to a wall. offsetCm is measured along the wall from its start corner (north/south from the west end, east/west from the north end).",
       {
@@ -409,6 +460,114 @@ export function createRoomTools(store: RoomToolStore): RoomTool[] {
         const created = doc.openings.find((opening) => !before.has(opening.id));
         return ok({
           opening: created ? openingView(doc).find((view) => view.id === created.id) : null,
+          issues: validationView(doc),
+        });
+      },
+    ),
+
+    define(
+      "update_opening",
+      "Move, resize or reorient an existing door or window. Use the opening id returned by add_opening or get_room_state.",
+      {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          wall: { type: "string", enum: [...WALL_IDS] },
+          offsetCm: { ...NUMBER, minimum: 0 },
+          widthCm: {
+            ...NUMBER,
+            minimum: MIN_OPENING_WIDTH_CM,
+            maximum: MAX_OPENING_WIDTH_CM,
+          },
+          swing: { type: "string", enum: [...SWINGS], description: "Doors only." },
+          sillHeightCm: { ...NUMBER, minimum: 0, description: "Windows only." },
+        },
+        required: ["id"],
+        additionalProperties: false,
+      },
+      (args) => {
+        const id = requiredString(args, "id");
+        const doc = store.getState().present;
+        const opening = doc.openings.find((entry) => entry.id === id);
+        if (!opening) return fail(`No opening with id "${id}".`);
+
+        const wall = optionalEnum(args, "wall", WALL_IDS);
+        const offsetCm = optionalNumber(args, "offsetCm", { min: 0 });
+        const widthCm = optionalNumber(args, "widthCm", {
+          min: MIN_OPENING_WIDTH_CM,
+          max: MAX_OPENING_WIDTH_CM,
+        });
+        const swing = optionalEnum(args, "swing", SWINGS);
+        const sillHeightCm = optionalNumber(args, "sillHeightCm", { min: 0 });
+        if (
+          wall === undefined &&
+          offsetCm === undefined &&
+          widthCm === undefined &&
+          swing === undefined &&
+          sillHeightCm === undefined
+        ) {
+          throw new ToolInputError(
+            "Provide at least one of wall, offsetCm, widthCm, swing or sillHeightCm.",
+          );
+        }
+        if (swing !== undefined && opening.kind !== "door") {
+          throw new ToolInputError('"swing" can only be changed on a door.');
+        }
+        if (sillHeightCm !== undefined && opening.kind !== "window") {
+          throw new ToolInputError('"sillHeightCm" can only be changed on a window.');
+        }
+
+        const targetWall = wall ?? opening.wall;
+        const targetWidth = widthCm ?? opening.widthCm;
+        const wallLength = wallLengthCm(doc, targetWall);
+        if (targetWidth > wallLength) {
+          throw new ToolInputError(
+            `"widthCm" must be at most ${wallLength} on the ${targetWall} wall.`,
+          );
+        }
+        const targetOffset = offsetCm ?? opening.offsetCm;
+        const maxOffset = wallLength - targetWidth;
+        if (targetOffset > maxOffset) {
+          throw new ToolInputError(
+            `The resulting "offsetCm" must be at most ${maxOffset} on the ${targetWall} wall.`,
+          );
+        }
+
+        const patch: Partial<Omit<Opening, "id">> = {};
+        if (wall !== undefined) patch.wall = wall;
+        if (offsetCm !== undefined) patch.offsetCm = offsetCm;
+        if (widthCm !== undefined) patch.widthCm = widthCm;
+        if (swing !== undefined) patch.swing = swing;
+        if (sillHeightCm !== undefined) patch.sillHeightCm = sillHeightCm;
+        store.dispatch({ kind: "document", action: { type: "update_opening", id, patch } });
+
+        const updatedDoc = store.getState().present;
+        return ok({
+          opening: openingView(updatedDoc).find((entry) => entry.id === id) ?? null,
+          issues: validationView(updatedDoc),
+        });
+      },
+    ),
+
+    define(
+      "remove_opening",
+      "Delete an existing door or window by opening id as one undoable change.",
+      {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+        additionalProperties: false,
+      },
+      (args) => {
+        const id = requiredString(args, "id");
+        if (!store.getState().present.openings.some((opening) => opening.id === id)) {
+          return fail(`No opening with id "${id}".`);
+        }
+        store.dispatch({ kind: "document", action: { type: "remove_opening", id } });
+        const doc = store.getState().present;
+        return ok({
+          removedId: id,
+          openings: openingView(doc),
           issues: validationView(doc),
         });
       },
@@ -790,6 +949,16 @@ export function createRoomTools(store: RoomToolStore): RoomTool[] {
           activated: { id: variant.id, name: variant.name },
           ...stateView(store.getState(), true),
         });
+      },
+    ),
+
+    define(
+      "reset_current_layout",
+      "Reset the current room to a fresh default layout as one undoable change. Saved layout variants remain available.",
+      { type: "object", properties: {}, additionalProperties: false },
+      () => {
+        store.dispatch({ kind: "reset" });
+        return ok({ reset: true, ...stateView(store.getState(), true) });
       },
     ),
 

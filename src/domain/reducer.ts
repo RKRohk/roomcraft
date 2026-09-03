@@ -51,7 +51,7 @@ export interface CustomItemPlacement {
 export type RoomAction =
   | { type: "set_room_dimensions"; widthCm?: number; depthCm?: number; wallThicknessCm?: number }
   | { type: "rename_room"; name: string }
-  | { type: "set_settings"; patch: Partial<RoomSettings> }
+  | { type: "set_settings"; patch: Partial<RoomSettings>; name?: string }
   | {
       type: "add_opening";
       kind: OpeningKind;
@@ -132,9 +132,11 @@ export function applyAction(
 
     case "set_settings": {
       const patch = action.patch;
+      const name = action.name?.trim();
       return touch(
         {
           ...doc,
+          ...(name ? { name } : {}),
           settings: {
             clearanceCm: clamp(patch.clearanceCm ?? doc.settings.clearanceCm, 0, 300),
             gridCm: clamp(patch.gridCm ?? doc.settings.gridCm, 1, 100),

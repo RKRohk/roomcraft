@@ -20,7 +20,10 @@ RoomCraft is a WebMCP-enabled collaborative 2D room planner for a hackathon.
 
 - get_room_state
 - set_room_dimensions
+- set_room_settings
 - add_opening
+- update_opening
+- remove_opening
 - search_furniture
 - create_custom_item
 - place_furniture
@@ -30,6 +33,7 @@ RoomCraft is a WebMCP-enabled collaborative 2D room planner for a hackathon.
 - validate_layout
 - save_layout_variant
 - activate_layout_variant
+- reset_current_layout
 - undo_last_change
 
 Use `document.modelContext.registerTool(...)` and provide a safe TypeScript declaration/fallback when native WebMCP is unavailable. Tool inputs must use explicit JSON schemas. Tool results must be structured, compact, and useful to an agent.

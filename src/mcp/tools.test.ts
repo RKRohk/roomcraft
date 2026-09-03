@@ -149,6 +149,42 @@ describe("room WebMCP tools", () => {
     expect(result.structuredContent).toMatchObject({ room: { widthCm: 600, depthCm: 420 } });
   });
 
+  it("sets room settings and name as one undoable change", async () => {
+    const store = testStore();
+    const result = await toolsFor(store).get("set_room_settings")!.execute({
+      name: "Primary bedroom",
+      clearanceCm: 90,
+      gridCm: 5,
+      snapToGrid: false,
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({
+      name: "Primary bedroom",
+      settings: { clearanceCm: 90, gridCm: 5, snapToGrid: false },
+      canUndo: true,
+    });
+    expect(store.getState().past).toHaveLength(1);
+
+    await toolsFor(store).get("undo_last_change")!.execute({});
+    expect(store.getState().present).toMatchObject({
+      name: "Untitled room",
+      settings: { clearanceCm: 75, gridCm: 10, snapToGrid: true },
+    });
+  });
+
+  it("rejects empty or out-of-range room settings without mutation", async () => {
+    const store = testStore();
+    const tool = toolsFor(store).get("set_room_settings")!;
+    const before = store.getState().present;
+
+    expect((await tool.execute({})).isError).toBe(true);
+    expect((await tool.execute({ clearanceCm: 301 })).isError).toBe(true);
+    expect((await tool.execute({ gridCm: 0 })).isError).toBe(true);
+    expect((await tool.execute({ name: "   " })).isError).toBe(true);
+    expect(store.getState().present).toBe(before);
+  });
+
   it("rejects invalid arguments without mutating state", async () => {
     const store = testStore();
     const before = store.getState().present;
@@ -264,6 +300,98 @@ describe("room WebMCP tools", () => {
     expect(structured.issues.some((issue) => issue.code === "blocked-door")).toBe(true);
   });
 
+  it("updates an opening as one undoable change", async () => {
+    const store = testStore();
+    const tools = toolsFor(store);
+    const added = await tools.get("add_opening")!.execute({
+      kind: "door",
+      wall: "north",
+      offsetCm: 40,
+      widthCm: 80,
+      swing: "inward-right",
+    });
+    const id = (added.structuredContent as { opening: { id: string } }).opening.id;
+
+    const updated = await tools.get("update_opening")!.execute({
+      id,
+      wall: "west",
+      offsetCm: 60,
+      widthCm: 100,
+      swing: "outward-left",
+    });
+
+    expect(updated.isError).toBeFalsy();
+    expect(updated.structuredContent).toMatchObject({
+      opening: { id, kind: "door", wall: "west", offsetCm: 60, widthCm: 100, swing: "outward-left" },
+    });
+    expect(store.getState().past).toHaveLength(2);
+
+    await tools.get("undo_last_change")!.execute({});
+    expect(store.getState().present.openings[0]).toMatchObject({
+      id,
+      wall: "north",
+      offsetCm: 40,
+      widthCm: 80,
+      swing: "inward-right",
+    });
+  });
+
+  it("rejects invalid opening updates without mutation", async () => {
+    const store = testStore();
+    const tools = toolsFor(store);
+    const added = await tools.get("add_opening")!.execute({
+      kind: "window",
+      wall: "north",
+      offsetCm: 40,
+      widthCm: 120,
+      sillHeightCm: 90,
+    });
+    const id = (added.structuredContent as { opening: { id: string } }).opening.id;
+    const before = store.getState().present;
+
+    expect((await tools.get("update_opening")!.execute({ id: "missing", offsetCm: 10 })).isError).toBe(true);
+    expect((await tools.get("update_opening")!.execute({ id, swing: "inward-left" })).isError).toBe(true);
+    expect((await tools.get("update_opening")!.execute({ id, offsetCm: 470 })).isError).toBe(true);
+    expect(store.getState().present).toBe(before);
+  });
+
+  it("removes an opening as one undoable change", async () => {
+    const store = testStore();
+    const tools = toolsFor(store);
+    const added = await tools.get("add_opening")!.execute({
+      kind: "window",
+      wall: "south",
+      offsetCm: 120,
+      widthCm: 140,
+      sillHeightCm: 95,
+    });
+    const id = (added.structuredContent as { opening: { id: string } }).opening.id;
+
+    const removed = await tools.get("remove_opening")!.execute({ id });
+
+    expect(removed.isError).toBeFalsy();
+    expect(removed.structuredContent).toMatchObject({ removedId: id, openings: [] });
+    expect(store.getState().present.openings).toEqual([]);
+
+    await tools.get("undo_last_change")!.execute({});
+    expect(store.getState().present.openings[0]).toMatchObject({
+      id,
+      kind: "window",
+      wall: "south",
+      sillHeightCm: 95,
+    });
+  });
+
+  it("rejects removing an unknown opening without mutation", async () => {
+    const store = testStore();
+    const before = store.getState().present;
+
+    const removed = await toolsFor(store).get("remove_opening")!.execute({ id: "missing" });
+
+    expect(removed.isError).toBe(true);
+    expect(store.getState().present).toBe(before);
+  });
+
   it("applies a whole layout in one call", async () => {
     const store = testStore();
     const result = await toolsFor(store)
@@ -296,6 +424,32 @@ describe("room WebMCP tools", () => {
 
     const missing = await tools.get("activate_layout_variant")!.execute({ name: "ghost" });
     expect(missing.isError).toBe(true);
+  });
+
+  it("resets the current layout to a fresh undoable room while keeping saved variants", async () => {
+    const store = testStore();
+    const tools = toolsFor(store);
+    await tools.get("set_room_dimensions")!.execute({ widthCm: 600, depthCm: 420 });
+    await tools.get("place_furniture")!.execute({ catalogId: "seat-armchair", xCm: 100, yCm: 100 });
+    await tools.get("save_layout_variant")!.execute({ name: "Before reset" });
+
+    const reset = await tools.get("reset_current_layout")!.execute({});
+
+    expect(reset.isError).toBeFalsy();
+    expect(reset.structuredContent).toMatchObject({
+      reset: true,
+      room: { widthCm: 480, depthCm: 360 },
+      furniture: [],
+      variants: [{ name: "Before reset" }],
+      canUndo: true,
+    });
+    expect(store.getState().present.furniture).toEqual([]);
+    expect(store.getState().variants).toHaveLength(1);
+
+    const undone = await tools.get("undo_last_change")!.execute({});
+    expect(undone.isError).toBeFalsy();
+    expect(store.getState().present.room).toMatchObject({ widthCm: 600, depthCm: 420 });
+    expect(store.getState().present.furniture).toHaveLength(1);
   });
 
   it("undoes its own last change through the shared history", async () => {
