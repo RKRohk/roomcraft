@@ -16,6 +16,12 @@ export const metadata: Metadata = {
   title: "RoomCraft — 2D room planner",
   description:
     "Plan a room in 2D: set dimensions, place doors, windows and furniture, and check clearances. Agent-editable through WebMCP.",
+  icons: {
+    other: {
+      rel: "describedby",
+      url: "/llms.txt",
+    },
+  },
 };
 
 export const viewport: Viewport = {

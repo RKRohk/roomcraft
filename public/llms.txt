@@ -1,0 +1,27 @@
+# RoomCraft
+
+> RoomCraft is a browser-local 2D room planner whose WebMCP mutations update the same canvas and undo history as human edits.
+
+Use get_room_state first. Configure room dimensions and settings, search the fictional generic catalog or create custom items, then add/place/update furniture and openings. Run validate_layout after changes and save a layout variant when useful. IDs come from tool results or `get_room_state`; mutations are undoable. State is browser-local and persisted. Source URLs on custom items are metadata only and are never fetched.
+
+Geometry uses centimetres with a northwest interior origin: x increases east and y increases south. Furniture x/y coordinates are footprint centres. Opening offsets run from the wall start: north/south openings measure from west, and east/west openings measure from north.
+
+## WebMCP tools
+
+- `get_room_state`
+- `set_room_dimensions`
+- `set_room_settings`
+- `add_opening`
+- `update_opening`
+- `remove_opening`
+- `search_furniture`
+- `create_custom_item`
+- `place_furniture`
+- `update_furniture`
+- `remove_furniture`
+- `apply_layout`
+- `validate_layout`
+- `save_layout_variant`
+- `activate_layout_variant`
+- `reset_current_layout`
+- `undo_last_change`
